@@ -1,0 +1,67 @@
+{
+    "Mejillones": {
+        "lat": -23.0965,
+        "lon": -70.4486,
+        "timezone": "America/Santiago"
+    },
+    "Vallenar": {
+        "lat": -28.5708,
+        "lon": -70.7581,
+        "timezone": "America/Santiago"
+    },
+    "La Serena": {
+        "lat": -29.9027,
+        "lon": -71.2519,
+        "timezone": "America/Santiago"
+    },
+    "Rapa Nui": {
+        "lat": -27.1212,
+        "lon": -109.366,
+        "timezone": "Pacific/Easter"
+    },
+    "Valparaiso": {
+        "lat": -33.0458,
+        "lon": -71.6197,
+        "timezone": "America/Santiago"
+    },
+    "Santiago": {
+        "lat": -33.4489,
+        "lon": -70.6693,
+        "timezone": "America/Santiago"
+    },
+    "San Antonio": {
+        "lat": -33.5809,
+        "lon": -71.6132,
+        "timezone": "America/Santiago"
+    },
+    "El Quisco": {
+        "lat": -33.4,
+        "lon": -71.7,
+        "timezone": "America/Santiago"
+    },
+    "San Fernando": {
+        "lat": -34.5867,
+        "lon": -70.9911,
+        "timezone": "America/Santiago"
+    },
+    "Pichilemu": {
+        "lat": -34.3878,
+        "lon": -72.0042,
+        "timezone": "America/Santiago"
+    },
+    "Curico": {
+        "lat": -34.9828,
+        "lon": -71.2394,
+        "timezone": "America/Santiago"
+    },
+    "Concepcion": {
+        "lat": -36.8269,
+        "lon": -73.0498,
+        "timezone": "America/Santiago"
+    },
+    "Puerto Williams": {
+        "lat": -54.9336,
+        "lon": -67.6143,
+        "timezone": "America/Punta_Arenas"
+    }
+}
