@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Predictor de Arreboles (Préboles)</title>
+  
+  <!-- Dependencias externas -->
+  <script src="https://unpkg.com/suncalc"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  
+  <link rel="stylesheet" href="https://nicomedinap.github.io/public/css/preboles_2.css">
+  
+
+  <!-- ===== SEGURIDAD ===== -->
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+  <!-- Content Security Policy (ajustar según necesidades) -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://nicomedinap.github.io;
+    style-src 'self' 'unsafe-inline' https://unpkg.com;
+    img-src 'self' data: https://as2.ftcdn.net https://*.open-meteo.com https://*.tile.openstreetmap.org https://unpkg.com;
+    frame-src 'self' https://www.youtube.com https://youtu.be;
+    connect-src 'self' https://api.open-meteo.com https://*.tile.openstreetmap.org https://script.google.com https://script.googleusercontent.com;
+    font-src 'self' data:;
+  ">
+
+
+  <style>
+    /* cuando hay buena visibilidad,*/
+    .no-limits {
+      color: #2196F3;
+      font-weight: bold;
+      text-shadow: 0 0 8px rgba(33, 150, 243, 0.8);
+    }
+  </style>
+
+</head>
+
+<body>
+
+<!--
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="chile" onclick="setMode('chile')">🇨🇱 Chile</button>
+    <button class="mode-btn" data-mode="world" onclick="setMode('world')">🌎 Mundo</button>
+  </div> -->
+
+  <div class="title-container">
+    <h2 class="title">
+      Préboles<span class="trebol-wrap"><span class="gradient-text trebol-arebol" id="trebolEmoji">🍀</span><span id="arrebolPercent" class="arrebol-percent">0%</span></span>    </h2>
+    <div class="subtitle">
+      <span class="gradient-text">PRE</span>dictor de arre<span class="gradient-text">BOLES</span>
+    </div>
+  </div>
+  
+  <div id="loadingIndicator" style="text-align:center; padding:20px;">
+    <div class="loading" style="width:40px; height:40px; margin:0 auto;"></div>
+    <p style="margin-top:10px;">Obteniendo datos...</p>
+  </div>
+
+  <!-- CONTENEDOR PRINCIPAL CON PESTAÑAS -->
+  <div class="tabs-container">
+    <div class="tabs-header">
+      <button class="tab-btn active" data-tab="cities"        onclick="switchTab('cities')">🏙️ Ciudades</button>
+      <button class="tab-btn"        data-tab="observatories" onclick="switchTab('observatories')" style="font-size:0.95em;display:flex;align-items:center;justify-content:center;gap:5px;">🔭 Observatorios</button>
+      <button class="tab-btn"        data-tab="ranking"       onclick="switchTab('ranking')">📊 Ranking</button>
+      <button class="tab-btn"        data-tab="history"       onclick="switchTab('history')">📜 Datos</button>
+    </div>
+
+    <div class="prediction-toggle">
+      <button id="btnSunrise">🌅 Amanecer</button>
+      <button id="btnSunset" class="active">🌇 Atardecer</button>
+    </div>
+    
+    <div class="day-selector" id="daySelector"></div>
+
+    <!-- Pestaña 1: Ciudades -->   
+    <div id="tab-cities" class="tab-content active">
+      <h2>Probabilidad de arrebol en la tarde</h2>
+      <span id="fechaPrediccion"></span>
+      <div id="queryDateTime" style="opacity:0.8; font-size:0.9rem; margin-bottom:10px;"></div>
+
+
+    <div class="coord-predict-panel">
+      <div class="coord-controls coord-row-single">
+        <span class="coord-label">📍 No ves tu ciudad?</span>
+        <span class="coord-label-small">coordenadas:</span>
+        <input type="number" id="coordLat" placeholder="Latitud" step="0.0001">
+        <input type="number" id="coordLon" placeholder="Longitud" step="0.0001">
+        <button onclick="predictFromManualCoords()" class="coord-btn-primary">🔍 Buscar</button>
+        <button onclick="predictFromGeolocation()" class="coord-btn-geo">📡 GPS</button>
+      </div>
+    </div>
+
+
+      <div id="cityMenu"></div>
+      <div id="appContainer">
+        <button class="back" onclick="volverMenu()">← Volver</button>
+        <div class="container">
+          <h1 id="cityTitle">🌇 Predictor de Arrebol</h1>
+          
+          <!-- Contenedor principal con elementos independientes -->
+          <div class="main-grid">
+            <!-- 1. PREDICCIÓN (siempre primera) -->
+            <div class="prediction-panel panel">
+              <div id="result">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+                  <div style="flex:1; min-width:200px;">
+                    <div id="locationText">Seleccione ciudad</div>
+                    <div class="sun-times" id="sunTimes"></div>
+                  </div>
+                  <div id="loadingState"></div>
+                </div>
+                <div class="data-grid" id="dataGrid">
+                  <div class="data-item">🌅 Nubes a puesta de sol: <strong id="sunsetClouds">—</strong></div>
+                  <div class="data-item">🌡️ Temperatura: <strong id="temperature">—</strong></div>
+                  <div class="data-item">💧 Humedad: <strong id="humidity">—</strong></div>
+                  <div class="data-item">📊 Presión: <strong id="pressure">—</strong></div>
+                </div>
+                <div class="predictions" id="predictions"></div>
+                
+                <!-- Botones toggle para paneles -->
+                <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+                  <button class="toggle-btn" onclick="togglePanel('factorPanel')" id="toggleFactorBtn">
+                    📊 Ver contribuciones
+                  </button>
+                  <button class="toggle-btn" onclick="togglePanel('uncertaintyPanel')" id="toggleUncertaintyBtn">
+                    🎯 Ver incerteza
+                  </button>
+                </div>
+                
+                <!-- Panel de contribuciones por factor (oculto por defecto) -->
+                <div id="factorPanel" style="margin-top:6px; display:none;"></div>
+                <!-- Panel de incerteza Monte Carlo (oculto por defecto) -->
+                <div id="uncertaintyPanel" style="margin-top:6px; display:none;"></div>
+              </div>
+            </div>
+            
+            <!-- 2. MAPA -->
+            <div class="map-panel panel">
+              <div><strong>Mapa de probabilidad de arrebol</strong></div>
+              <div class="map-wrapper" style="height:550px;">
+                <div id="map"></div>
+                <div class="probability-legend">
+                  <div class="legend-title">Probabilidad de arrebol</div>
+                  <div class="legend-gradient"></div>
+                  <div class="legend-labels">
+                    <span>0%</span><span>50%</span><span>100%</span>
+                  </div>
+                </div>
+                <div class="map-controls">
+                  <button class="map-toggle active" id="toggleHeatmap" onclick="MapUtils.toggleHeatmap()">Hexágonos</button>
+                </div>
+                <div id="mapLoading" class="map-loading" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:10px; border-radius:8px;">
+                  Calculando...
+                </div>
+              </div>
+              <div style="font-size:0.9rem; opacity:0.9; margin-top:8px;">
+                Celdas hexagonales muestran la probabilidad de arrebol en la trayectoria hacia el atardecer. 
+                Resolución proporcional a los datos de Open-Meteo.
+                Colores más cálidos indican mayor probabilidad.
+              </div>
+            </div>
+            
+            <!-- 3. GRÁFICO -->
+            <div class="chart-panel panel">
+              <div class="charts" style="height:400px; width:100%;">
+                <canvas id="cloudChart"></canvas>
+              </div>
+            </div>
+            
+            <!-- 4. LOG -->
+            <div class="log-panel panel">
+              <strong>registro</strong>
+              <pre id="log" style="white-space:pre-wrap; font-size:0.85rem; margin:8px 0 0 0; max-height:150px; overflow-y:auto;"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+        
+    <!-- Pestaña 2: Ranking -->
+    <div id="tab-ranking" class="tab-content">
+      <div class="container">
+        <h2>Ranking de Probabilidades</h2>
+        <div class="info-grid">
+          <div class="info-card">
+            <h4>🥇 Top 10 - Mayor Probabilidad al atardecer</h4>
+            <br>
+            <div id="topRanking"><p>Cargando ranking...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Pestaña 3: Observatorios -->
+    <div id="tab-observatories" class="tab-content">
+      <div class="container">
+        <h2>🔭 Observatorios Astronómicos en Chile</h2>
+        <p class="lead" style="margin-left:auto; margin-right:auto;">Chile es la capital mundial de la astronomía. Selecciona un observatorio para ver la probabilidad de arrebol.</p>
+        
+        <div class="observatories-grid">
+          <!-- MENÚ DE OBSERVATORIOS -->
+          <div id="observatoryMenu" class="city-menu"></div>
+          
+          <!-- MAPA DE OBSERVATORIOS -->
+          <div class="panel" style="height:600px;">
+            <div><strong>📍 Ubicación de Observatorios</strong></div>
+            <div class="map-wrapper" style="height:50px;">
+              <div id="observatoriesMap"></div>
+              <div class="map-legend" style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.7); padding:8px 12px; border-radius:6px; color:white; font-size:0.85rem;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                  <div style="width:16px; height:16px; background:#ff9800; border-radius:50%; border:2px solid white;"></div>
+                  <span>Observatorio astronómico</span>
+                </div>
+                <div style="font-size:0.8rem; opacity:0.9;">Haz clic en un marcador para ver detalles</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pestaña 4: Información -->
+<div id="tab-info" class="tab-content">
+  <div class="container">
+
+    <!-- ===== ENCABEZADO VISUAL ===== -->
+    <div style="text-align:center; padding:10px 0 5px 0;">
+      <h1 style="font-size:2.2rem; margin:5px 0 0 0; color:var(--accent);">
+        ¿Qué es <span class="gradient-text">Préboles</span>?
+      </h1>
+      <p style="opacity:0.8; font-size:1.1rem; max-width:700px; margin:5px auto;">
+        Un <strong>predictor de arreboles</strong> basado en datos meteorológicos en tiempo real.
+      </p>
+    </div>
+
+    <!-- ===== INTRO CON IMAGEN DE FONDO ===== -->
+    <p class="lead-with-bg" style="margin:10px auto 20px auto;">
+      <span class="lead-content">
+        El arrebol es el fenómeno óptico donde la luz del sol colorea las nubes de rojo, naranjo o rosado durante el amanecer y atardecer.
+        <strong>Préboles</strong> analiza <strong>7 factores meteorológicos</strong> para predecir si habrá arrebol en tu ciudad.
+      </span>
+    </p>
+
+    <!-- ===== CÓMO FUNCIONA ===== -->
+    <div class="info-section">
+      <h3>¿Cómo funciona el modelo predictivo?</h3>
+      <p style="margin-bottom:8px;">
+        El modelo analiza <strong>7 factores clave</strong> en el momento del atardecer (o amanecer):
+      </p>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:12px; margin:12px 0;">
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border-left:3px solid #ff6600;">
+          <strong>☁️ Nubosidad</strong><br>
+          <small style="opacity:0.8;">Baja, media y alta — el tipo de nube determina el color del arrebol.</small>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border-left:3px solid #ff6600;">
+          <strong>🌡️ Temperatura</strong><br>
+          <small style="opacity:0.8;">Afecta la estabilidad de la atmósfera y la formación de nubes.</small>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border-left:3px solid #ff6600;">
+          <strong>💧 Humedad</strong><br>
+          <small style="opacity:0.8;">La humedad relativa influye en la densidad y opacidad de las nubes.</small>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border-left:3px solid #ff6600;">
+          <strong>📊 Presión</strong><br>
+          <small style="opacity:0.8;">Sistemas de alta/baja presión afectan la estabilidad del cielo.</small>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border-left:3px solid #ff6600;">
+          <strong>☀️ Radiación solar</strong><br>
+          <small style="opacity:0.8;">La cantidad de luz que llega a las nubes determina la intensidad del color.</small>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border-left:3px solid #ff6600;">
+          <strong>💨 Viento</strong><br>
+          <small style="opacity:0.8;">Velocidad y dirección del viento en superficie y a diferentes alturas.</small>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border-left:3px solid #ff6600;">
+          <strong>🌊 Visibilidad</strong><br>
+          <small style="opacity:0.8;">La claridad atmosférica afecta la percepción del arrebol.</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== CÓMO LEER LOS RESULTADOS ===== -->
+    <div class="info-section">
+      <h3>¿Cómo interpretar los resultados?</h3>
+      <div class="info-grid">
+        <div class="info-card" style="border-left:4px solid #d7191c; background:rgba(215,25,28,0.05);">
+          <h4 style="color:#d7191c;">🔴 Alta probabilidad (70-100%)</h4>
+          <p>Condiciones excelentes. Es muy probable que puedas observar un arrebol espectacular si las condiciones se mantienen.</p>
+          <div style="background:linear-gradient(90deg,#d7191c,#fdae61); height:6px; border-radius:3px; margin-top:8px;"></div>
+        </div>
+        <div class="info-card" style="border-left:4px solid #fdae61; background:rgba(253,174,97,0.05);">
+          <h4 style="color:#fdae61;">🟠 Media-alta (30-70%)</h4>
+          <p>Buenas condiciones. Hay posibilidades significativas de ver un arrebol, especialmente si estás en un lugar despejado.</p>
+          <div style="background:linear-gradient(90deg,#fdae61,#ffffbf); height:6px; border-radius:3px; margin-top:8px;"></div>
+        </div>
+        <div class="info-card" style="border-left:4px solid #abdda4; background:rgba(171,221,164,0.05);">
+          <h4 style="color:#abdda4;">🟢 Baja (0-30%)</h4>
+          <p>Condiciones desfavorables. Es poco probable que observes un arrebol significativo. ¡Pero no pierdas la esperanza!</p>
+          <div style="background:linear-gradient(90deg,#abdda4,#2b83ba); height:6px; border-radius:3px; margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px; padding:12px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid rgba(255,255,255,0.08);">
+        <strong>🔍 ¿Qué significa la incerteza?</strong>
+        <p style="font-size:0.9rem; opacity:0.9; margin:4px 0 0 0;">
+          El modelo muestra un <strong>±X%</strong> junto a la probabilidad. Eso indica el rango de confianza basado en 
+          <strong>simulaciones de Monte Carlo</strong>. Un rango pequeño (ej. ±5%) indica alta confianza; un rango grande (ej. ±25%) indica que el modelo es incierto.
+        </p>
+      </div>
+    </div>
+
+    <!-- ===== PREGUNTAS FRECUENTES (FAQ) ===== -->
+    <div class="info-section">
+      <h3>Preguntas Frecuentes (FAQ)</h3>
+      
+      <details style="padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06);">
+        <summary style="cursor:pointer; font-weight:600; color:#ffcc00;">¿Qué es exactamente un arrebol?</summary>
+        <p style="padding:8px 0 4px 20px; opacity:0.9;">Es un fenómeno óptico que ocurre durante el amanecer y atardecer, cuando la luz solar atraviesa la atmósfera y se dispersa en las nubes, produciendo colores rojizos, anaranjados y rosados.</p>
+      </details>
+      
+      <details style="padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06);">
+        <summary style="cursor:pointer; font-weight:600; color:#ffcc00;">¿De dónde provienen los datos meteorológicos?</summary>
+        <p style="padding:8px 0 4px 20px; opacity:0.9;">Los datos provienen de <strong>Open-Meteo</strong>, una API gratuita que agrega datos de estaciones meteorológicas de todo el mundo, incluyendo modelos numéricos de predicción del tiempo.</p>
+      </details>
+      
+      <details style="padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06);">
+        <summary style="cursor:pointer; font-weight:600; color:#ffcc00;">¿Qué tan preciso es el modelo?</summary>
+        <p style="padding:8px 0 4px 20px; opacity:0.9;">El modelo fue calibrado con datos históricos y tiene una precisión aproximada del <strong>72%</strong> en condiciones normales. La incerteza aumenta en condiciones meteorológicas extremas o en regiones con pocas estaciones meteorológicas.</p>
+      </details>
+      
+      <details style="padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06);">
+        <summary style="cursor:pointer; font-weight:600; color:#ffcc00;">¿Puedo predecir el arrebol en mi ciudad si no aparece en la lista?</summary>
+        <p style="padding:8px 0 4px 20px; opacity:0.9;">¡Sí! Usa la sección <strong>"📍 No ves tu ciudad?"</strong> e ingresa las coordenadas manuales o usa el GPS. El modelo funciona para cualquier ubicación en el mundo.</p>
+      </details>
+      
+      <details style="padding:10px 0;">
+        <summary style="cursor:pointer; font-weight:600; color:#ffcc00;">¿Puedo colaborar con el proyecto?</summary>
+        <p style="padding:8px 0 4px 20px; opacity:0.9;">¡Claro! El proyecto es de código abierto. Puedes reportar observaciones, sugerir mejoras o contribuir al código en <a href="https://github.com/nicomedinap" target="_blank" style="color:var(--accent);">GitHub</a>.</p>
+      </details>
+    </div>
+
+    <!-- ===== AGRADECIMIENTOS ===== -->
+    <div class="info-section" style="border-left-color: #4CAF50;">
+      <h3>Agradecimientos y colaboradores</h3>
+      <p style="opacity:0.9;">Este proyecto no sería posible sin:</p>
+      <ul style="opacity:0.85; font-size:0.9rem; padding-left:20px;">
+        <li><strong>Open-Meteo</strong> — por proveer datos meteorológicos gratuitos.</li>
+        <li><strong>SunCalc</strong> — por las herramientas de cálculo de posición solar.</li>
+        <li><strong>Leaflet</strong> — por el renderizado de mapas interactivos.</li>
+        <li><strong>Chart.js</strong> — por las visualizaciones de nubes.</li>
+        <li><strong>Y a ti</strong> — gracias por tu tiempo.</li>
+      </ul>
+    </div>
+
+    <!-- ===== CONTACTO ===== -->
+    <div class="info-section">
+      <h3>Contacto y redes sociales</h3>
+      <p style="opacity:0.9;">Para consultas técnicas, sugerencias o reportes de observaciones:</p>
+      <div class="contact-links">
+        <a href="https://nicomedinap.github.io/about.html" target="_blank" class="contact-link">
+          <span class="link-icon">👤</span><span class="link-text">Sobre el autor</span>
+        </a>
+        <a href="https://nicomedinap.github.io/2025/12/21/Preboles.html" target="_blank" class="contact-link">
+          <span class="link-icon">📄</span><span class="link-text">Artículo técnico</span>
+        </a>
+        <a href="https://github.com/nicomedinap" target="_blank" class="contact-link github">
+          <span class="link-icon">🐙</span><span class="link-text">GitHub</span>
+        </a>
+        <a href="https://www.instagram.com/nicomediap/" target="_blank" class="contact-link instagram">
+          <span class="link-icon">📷</span><span class="link-text">Instagram</span>
+        </a>
+      </div>
+      <div class="contact-note">
+        <p><strong>💡 ¿Viste un arrebol?</strong> ¡Cuéntanos en redes sociales con el hashtag <strong>#Préboles</strong>!</p>
+      </div>
+    </div>
+
+  </div><!-- /.container -->
+</div><!-- /#tab-info -->
+
+    <!-- Pestaña 5: Historial — contenido generado dinámicamente por renderHistoryTab() -->
+    <div id="tab-history" class="tab-content"></div>
+
+    <!-- Modal para cámara meteorológica -->
+    <div id="weatherCameraModal" class="weather-camera-modal">
+      <div class="weather-camera-content">
+        <div class="weather-camera-header">
+          <h3><span id="cameraLocationName">Cámara Meteorológica</span></h3>
+          <button class="close-camera" onclick="closeWeatherCamera()">&times;</button>
+        </div>
+        <div class="weather-camera-body" id="cameraBody">
+          <div class="weather-camera-fallback">
+            <i>🌤️</i>
+            <p>Cargando cámara...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.tabs-container -->
+
+  <!-- ==========================================================================
+       MÓDULOS
+       ========================================================================== -->
+
+  <!-- Funciones y procedimientos -->
+  <script src="preboles/Modulos_pruebas/test_timeUtils.js"></script>
+  <script src="preboles/Modulos_pruebas/test_maps.js"></script>
+  <script src="preboles/Modulos_pruebas/test_chartUtils.js"></script>
+  <script src="preboles/Modulos_pruebas/test_redProbability.js"></script>
+
+  <!-- Estado -->
+  <script src="preboles/Modulos_pruebas/stateManager.js"></script>
+
+  <!-- UI -->
+  <script src="preboles/Modulos_pruebas/test_tarjetas.js"></script>
+  <script src="preboles/Modulos_pruebas/test_navegacion.js"></script>
+
+  <!-- Datos -->
+  <script src="preboles/Modulos_pruebas/OpenMeteoData.js"></script>
+  <script src="https://nicomedinap.github.io/preboles/Mundo.js"></script>
+<!--  <script src="https://nicomedinap.github.io/preboles/ciudades.js"></script> -->
+  <script src="preboles/Modulos_pruebas/test_ciudades.js"></script>
+
+
+  <!-- Utilidades -->
+  <script src="preboles/Modulos_pruebas/test_ranking.js"></script>
+  <script src="preboles/Modulos_pruebas/test_GuardarDatos.js"></script>
+  <script src="preboles/Modulos_pruebas/prebol.js"></script>
+
+  <!-- ==========================================================================
+       MÓDULO: FUNCIÓN TOGGLE PARA PANELES
+       ========================================================================== -->
+  <script>
+
+    document.addEventListener('DOMContentLoaded', () => {
+      ['factorPanel', 'uncertaintyPanel'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      const fb = document.getElementById('toggleFactorBtn');
+      const ub = document.getElementById('toggleUncertaintyBtn');
+      if (fb) fb.textContent = '📊 Ver contribuciones';
+      if (ub) ub.textContent = '🎯 Ver incerteza';
+    });
+
+  </script>
+
+  <!-- ==========================================================================
+       MÓDULO: CÁMARA METEOROLÓGICA
+       ========================================================================== -->
+  <script>
+
+  function openWeatherCamera(locationName) {
+    // Sanitizar nombre
+    const safeName = safeLocationName(locationName);
+    const location = chileanCities[safeName];
+    if (!location?.weatherCamera) {
+      alert(`No hay cámara meteorológica disponible para ${safeName}`);
+      return;
+    }
+
+    const url = location.weatherCamera;
+    // Validar URL
+    if (!isValidExternalUrl(url)) {
+      alert('La URL de la cámara no es válida.');
+      return;
+    }
+
+    const modal = document.getElementById('weatherCameraModal');
+    const cameraBody = document.getElementById('cameraBody');
+    // Usar textContent en lugar de innerHTML
+    document.getElementById('cameraLocationName').textContent = `📷 ${safeName} - Cámara de referencia`;
+    cameraBody.innerHTML = ''; // limpiar seguro
+
+    // Construir contenido según tipo
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      let embedUrl = url;
+      if (url.includes('watch?v=')) {
+        embedUrl = url.replace('watch?v=', 'embed/');
+      } else if (url.includes('youtu.be/')) {
+        const videoId = url.split('youtu.be/')[1]?.split('?')[0] || '';
+        embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      }
+      if (isValidExternalUrl(embedUrl)) {
+        cameraBody.innerHTML = `<iframe class="weather-camera-iframe" src="${embedUrl}?autoplay=1&mute=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+      } else {
+        cameraBody.innerHTML = `<div class="weather-camera-fallback"><i>⚠️</i><p>URL de video no válida.</p></div>`;
+      }
+    } else if (/\.(jpg|jpeg|png|gif|webp)$/i.test(url)) {
+      if (isValidExternalUrl(url)) {
+        cameraBody.innerHTML = `<div style="text-align:center;"><img src="${url}" alt="Weather Camera" style="max-width:100%; max-height:60vh; border-radius:12px;" loading="lazy"><p style="color:#ccc; margin-top:10px; font-size:0.85rem;">Imagen actualizada periódicamente</p></div>`;
+      } else {
+        cameraBody.innerHTML = `<div class="weather-camera-fallback"><i>⚠️</i><p>URL de imagen no válida.</p></div>`;
+      }
+    } else {
+      if (isValidExternalUrl(url)) {
+        cameraBody.innerHTML = `<iframe class="weather-camera-iframe" src="${url}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+        // Timeout para fallback
+        setTimeout(() => {
+          const iframe = cameraBody.querySelector('.weather-camera-iframe');
+          if (iframe?.contentDocument?.readyState === 'complete' && iframe.contentDocument.body?.innerHTML === '') {
+            iframe.style.display = 'none';
+            const fallback = document.createElement('div');
+            fallback.className = 'weather-camera-fallback';
+            fallback.innerHTML = `<i>🌍</i><p>No se pudo cargar la cámara directamente.</p><a href="${url}" target="_blank" rel="noopener noreferrer">Abrir en nueva ventana →</a>`;
+            cameraBody.appendChild(fallback);
+          }
+        }, 5000);
+      } else {
+        cameraBody.innerHTML = `<div class="weather-camera-fallback"><i>⚠️</i><p>URL no válida.</p></div>`;
+      }
+    }
+
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeWeatherCamera() {
+    const modal = document.getElementById('weatherCameraModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+    setTimeout(() => {
+      const cameraBody = document.getElementById('cameraBody');
+      if (cameraBody) {
+        cameraBody.innerHTML = '';
+        const fallback = document.createElement('div');
+        fallback.className = 'weather-camera-fallback';
+        fallback.innerHTML = '<i>🌤️</i><p>Cargando cámara...</p>';
+        cameraBody.appendChild(fallback);
+      }
+    }, 300);
+  }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeWeatherCamera(); });
+    document.getElementById('weatherCameraModal').addEventListener('click', function(e) {
+      if (e.target === this) closeWeatherCamera();
+    });
+
+  </script>
+
+<!--
+  <script>
+    window.PrebolesMode = window.PrebolesMode || 'chile'; // 'chile' | 'world'
+
+    function getActiveLocations() {
+      return window.PrebolesMode === 'world' ? (window.WorldCities || {}) : window.chileanCities;
+    }
+    window.getActiveLocations = getActiveLocations;
+
+    function setMode(mode) {
+      if (mode === window.PrebolesMode) return;
+      window.PrebolesMode = mode;
+
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+
+      // Observatorios, Ranking y Datos son contenido específico de Chile.
+      const chileOnlyTabs = ['observatories', 'ranking', 'history'];
+      chileOnlyTabs.forEach(tab => {
+        const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+        if (btn) btn.style.display = mode === 'world' ? 'none' : '';
+      });
+      if (mode === 'world' && chileOnlyTabs.includes(getCurrentTab())) switchTab('cities');
+
+      closeDetailView();
+      mountCityCardView();
+    }
+    window.setMode = setMode;
+  </script> -->
+
+
+
+  <!-- ==========================================================================
+       SCRIPT PRINCIPAL
+       ========================================================================== -->
+  <script>
+
+    /* ==========================================================================
+       CONFIGURACIONES Y CONSTANTES
+       ========================================================================== */
+
+    const DEFAULT_UNCERTAINTY = {
+      cloudcover_low: { std: 18, min: 0, max: 100, distribution: 'beta' },
+      cloudcover_mid: { std: 15, min: 0, max: 100, distribution: 'beta' },
+      cloudcover_high: { std: 12, min: 0, max: 100, distribution: 'beta' },
+      temperature_2m: { std: 2.5, min: -20, max: 45, distribution: 'normal' },
+      pressure_msl: { std: 4, min: 950, max: 1050, distribution: 'normal' },
+      relativehumidity_2m: { std: 10, min: 0, max: 100, distribution: 'beta' },
+      shortwave_radiation: { std: 25, min: 0, max: 1200, distribution: 'lognormal' }
+    };
+
+
+
+    let map = null, marker = null, heatLayer = null, labelLayer = null;
+    let heatmapEnabled = true, labelsEnabled = true, weatherDataCache = {};
+
+    let currentState = {
+      lat: null, lon: null, cityName: '', hourly: null,
+      preds: { sunrise: 0, sunset: 0 }, sunTimes: null,
+      sunriseElev: null, sunsetElev: null, meteoData: null
+    };
+
+    let currentLocation = {
+      type: null, name: '', lat: null, lon: null, data: null, originalTab: null
+    };
+
+    function log(msg) {
+      const line = `[${new Date().toLocaleString()}] ${msg}`;
+      console.log(line);
+      const el = document.getElementById('log');
+      if (el) el.textContent = line + '\n' + el.textContent;
+    }
+
+    window.prebolesResultados = {};
+
+    /* ==========================================================================
+      UTILIDADES DE SEGURIDAD
+      ========================================================================== */
+
+    // Escapa texto para prevenir XSS en innerHTML
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Versión más ligera para textos simples (solo caracteres peligrosos)
+    function safeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Valida URLs externas (solo http/https, bloquea IPs internas)
+    function isValidExternalUrl(url) {
+      if (!url) return false;
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+        const host = parsed.hostname.toLowerCase();
+        const blocked = ['localhost', '127.0.0.1', '::1', '0.0.0.0',
+          '192.168.', '10.', '172.16.', '172.17.', '172.18.', '172.19.',
+          '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.',
+          '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.'
+        ];
+        for (const prefix of blocked) {
+          if (host.startsWith(prefix)) return false;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    // Sanitiza nombres de ubicaciones
+    function safeLocationName(name) {
+      if (!name) return 'Ubicación';
+      return String(name).replace(/[<>"'`]/g, '');
+    }
+
+    // Botón "atrás"/"adelante" del navegador: si la URL vuelve a tener
+    // ?ciudad=X, reabre esa ciudad; si no, cierra el detalle sin volver
+    // a tocar el historial (el navegador ya lo hizo).
+    window.addEventListener('popstate', () => {
+      const params = new URLSearchParams(window.location.search);
+      const ciudad = params.get('ciudad');
+
+      if (ciudad && chileanCities[ciudad]) {
+        const tipo = params.get('tipo') || 'city';
+        showPrediction(ciudad, tipo, false);
+      } else {
+        closeDetailView();
+      }
+    });
+
+    /* ====================================
+       MAPA DE OBSERVATORIOS
+       ==================================== */
+    function initObservatoriesMap() {
+      const mapContainer = document.getElementById('observatoriesMap');
+      if (!mapContainer || mapContainer._leaflet_id) return;
+      const obsMap = L.map('observatoriesMap').setView([-30, -70], 5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(obsMap);
+      Object.entries(chileanCities).filter(([, info]) => info.type === 'observatory').forEach(([name, obs]) => {
+        const customIcon = L.divIcon({
+          className: 'observatory-icon',
+          html: `<div style="background:#ff9800;width:24px;height:24px;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;">🔭</div>`,
+          iconSize: [24, 24], iconAnchor: [12, 12]
+        });
+        L.marker([obs.lat, obs.lon], { icon: customIcon }).addTo(obsMap).bindPopup(`
+          <div style="min-width:200px;">
+            <strong>${name}</strong><br><small>${obs.region}</small><br>
+            <hr style="margin:5px 0;opacity:0.3;">
+            <strong>Altitud:</strong> ${obs.altitude ? obs.altitude.toLocaleString() : 'N/A'} m<br>
+            ${obs.operator ? `<strong>Operador:</strong> ${obs.operator}<br>` : ''}
+            <button onclick="showPrediction('${name}', 'observatory')" style="margin-top:5px;padding:5px 10px;background:#ff6600;border:none;border-radius:4px;color:white;cursor:pointer;font-size:12px;width:100%;">Ver predicción</button>
+          </div>`);
+      });
+    }
+
+    /* ==========================================================================
+       PREDICCIÓN PRINCIPAL
+       ========================================================================== */
+    async function collectTrainingData(cityName, lat, lon, sunriseResult, sunsetResult, sunriseElev, sunsetElev, sunrise, sunset, optimalSunsetTime, sunriseData, sunsetData, meteoData) {
+        try {
+            if (typeof dataCollector === 'undefined') return;
+            
+            const srProb = (typeof sunriseResult === 'number') ? sunriseResult : sunriseResult.probability;
+            const ssProb = (typeof sunsetResult === 'number') ? sunsetResult : sunsetResult.probability;
+            const altitude = chileanCities[cityName]?.altitude ?? 0;
+            const locationType = currentLocation.type || 'city';
+            
+            // Función auxiliar para construir el objeto de datos de un evento
+            function buildEventData(kind, kindData, kindProb, kindElev, kindTime, kindOptimal) {
+                return {
+                    locationName: cityName,
+                    locationType: locationType,
+                    lat: lat,
+                    lon: lon,
+                    altitude: altitude,
+                    kind: kind,
+                    prob: kindProb,
+                    elev: kindElev,
+                    time: kindTime?.toISOString() ?? null,
+                    optimalArrebolTime: kindOptimal,
+                    clouds: {
+                        low: kindData?.low ?? 0,
+                        mid: kindData?.mid ?? 0,
+                        high: kindData?.high ?? 0,
+                        total: kindData?.total ?? 0
+                    },
+                    weather: {
+                        temperature: kindData?.temperature ?? meteoData.current.temperature,
+                        humidity:    kindData?.humidity    ?? meteoData.current.humidity,
+                        pressure:    kindData?.pressure    ?? meteoData.current.pressure,
+                        dewpoint:    kindData?.dewpoint    ?? meteoData.current.dewpoint,
+                        shortwave:   kindData?.shortwave   ?? meteoData.current.shortwave,
+                        wind10m:          kindData?.wind10m          ?? meteoData.current.wind10m,
+                        windDir10m:       kindData?.windDir10m       ?? meteoData.current.windDir10m,
+                        windLow:          kindData?.windLow          ?? meteoData.current.windLow,
+                        windMid:          kindData?.windMid          ?? meteoData.current.windMid,
+                        windHigh:         kindData?.windHigh         ?? meteoData.current.windHigh,
+                        directRadiation:  kindData?.directRadiation  ?? meteoData.current.directRadiation,
+                        diffuseRadiation: kindData?.diffuseRadiation ?? meteoData.current.diffuseRadiation,
+                        visibility:       kindData?.visibility       ?? meteoData.current.visibility,
+                        freezingLevel:    kindData?.freezingLevel    ?? meteoData.current.freezingLevel
+                    }
+                };
+            }
+
+            // Guardar AMBOS eventos: AMANECER y ATARDECER
+            const sunriseEvent = buildEventData('sunrise', sunriseData, srProb, sunriseElev, sunrise, null);
+            const sunsetEvent = buildEventData('sunset', sunsetData, ssProb, sunsetElev, sunset, optimalSunsetTime);
+            
+            // Usar la nueva función que guarda ambos
+            if (typeof dataCollector.collectBothPredictions === 'function') {
+                dataCollector.collectBothPredictions(sunriseEvent, sunsetEvent);
+                log(`📊 Datos recolectados: AMANECER + ATARDECER para ${cityName}`);
+            } else {
+                // Fallback: guardar individualmente (por si la librería no está actualizada)
+                dataCollector.collectPrediction(sunriseEvent);
+                dataCollector.collectPrediction(sunsetEvent);
+                log(`📊 Datos recolectados (fallback): AMANECER + ATARDECER para ${cityName}`);
+            }
+            
+        } catch (e) {
+            log(`⚠ Error en recolección de datos: ${e.message}`);
+        }
+    }
+
+    async function predictRedSunset(lat, lon, cityName = '') {
+      updateQueryDateTime();
+      log(`Predicción para ${cityName || `${lat},${lon}`}`);
+      try {
+        MapUtils.clearMapLayers();
+        MapUtils.initMap(lat, lon, cityName);
+
+        const altitude = chileanCities[cityName]?.altitude ?? 0;
+        const result = await computeCityPrediction(lat, lon, { nSimulations: 20, returnFactors: true, altitude });
+        
+        if (!result) throw new Error('No se pudieron obtener datos meteorológicos.');
+
+        const { meteoData, sunsetMoment, sunriseMoment } = result;
+        const sunsetProbResult  = result.sunset;
+        const sunriseProbResult = result.sunrise;
+
+        const now   = timeUtils.localNoonDate(timeUtils.getQueryDate());
+        const times = SunCalc.getTimes(now, lat, lon);
+        const { sunrise, sunset } = times;
+
+        const sunriseData      = sunriseMoment.data;
+        const sunsetData       = sunsetMoment.data;
+        const sunriseElev      = sunriseMoment.elevDeg;
+        const sunsetElev       = sunsetMoment.elevDeg;
+        const optimalSunsetTime = sunsetMoment.optimalTime;
+
+        log(`✓ Atardecer: ${optimalSunsetTime.toLocaleTimeString('es-CL')}`);
+        log(`  Nubes: Bajas=${Math.round(sunsetData.low)}% Med=${Math.round(sunsetData.mid)}% Alt=${Math.round(sunsetData.high)}%`);
+        log(`  Irradiancia: ${Math.round(sunsetData.shortwave ?? 0)} W/m²`);
+
+        currentState = {
+          lat, lon, cityName,
+          hourly: meteoData.cloudSeries,
+          meteoData,
+          sunTimes: times,
+          sunriseElev, sunsetElev,
+          sunriseMoment,
+          preds: { sunrise: sunriseProbResult.probability, sunset: sunsetProbResult.probability },
+          sunriseData, sunsetData,
+          optimalSunsetTime,
+          altitude
+        };
+
+        // Expone la última predicción calculada.
+        window.lastPrediction = {
+            cityName,
+            sunrise: Math.round(sunriseProbResult.probability * 100),
+            sunset: Math.round(sunsetProbResult.probability * 100)
+        };
+
+        // Para que Playwright pueda acceder a toda la info.
+        window.prebolesPredicciones ??= {};
+        window.prebolesPredicciones[cityName] = {
+            lat, lon,
+            sunrise: Math.round(sunriseProbResult.probability * 100),
+            sunset: Math.round(sunsetProbResult.probability * 100),
+            sunriseConfidence: sunriseProbResult.confidence,
+            sunsetConfidence: sunsetProbResult.confidence
+        };
+
+        await collectTrainingData(cityName, lat, lon, sunriseProbResult, sunsetProbResult, sunriseElev, sunsetElev, sunrise, sunset, optimalSunsetTime, sunriseData, sunsetData, meteoData);
+
+        updateUI(cityName, lat, lon, meteoData, sunrise, sunset, sunriseData, sunsetData, sunriseProbResult, sunsetProbResult, optimalSunsetTime);
+        updateCharts(meteoData, sunrise, sunset, timeUtils.getSunsetIndex(meteoData, lat, lon, true), timeUtils.getSunsetIndex(meteoData, lat, lon, false));
+        if (heatmapEnabled) await MapUtils.updateHeatmap(lat, lon, altitude);
+
+        log(`% arrebol: amanecer ${(sunriseProbResult.probability * 100).toFixed(1)}% ±${(sunriseProbResult.confidence.std * 100).toFixed(1)}%`);
+        log(`% arrebol: atardecer ${(sunsetProbResult.probability * 100).toFixed(1)}% ±${(sunsetProbResult.confidence.std * 100).toFixed(1)}%`);
+        log(`Confianza atardecer: ${sunsetProbResult.confidence.level}`);
+        log(`Máximo arrebol estimado: ${optimalSunsetTime.toLocaleTimeString('es-CL')}`);
+      } catch (e) {
+        document.getElementById('loadingState').innerHTML = '';
+        log('Error en predictRedSunset: ' + e?.message);
+        console.error(e);
+      }
+    }
+
+    /* ==========================================================================
+      PREDICCIÓN POR COORDENADAS MANUALES / GEOLOCALIZACIÓN
+      ========================================================================== */
+    function toggleCoordPanel() {
+      const body = document.getElementById('coordPanelBody');
+      body.style.display = body.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function openCoordPrediction(lat, lon, label) {
+      currentLocation = { type: 'coords', name: label, lat, lon, data: null };
+
+      // Reutiliza el mismo panel de detalle que usan las ciudades.
+      document.getElementById('cityMenu').style.display = 'none';
+      document.getElementById('appContainer').style.display = 'block';
+      document.getElementById('cityTitle').textContent = `🌇 ${label}`;
+
+      predictRedSunset(lat, lon, label);
+    }
+
+    // Seguridad
+    function predictFromManualCoords() {
+      const lat = parseFloat(document.getElementById('coordLat').value);
+      const lon = parseFloat(document.getElementById('coordLon').value);
+
+      if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        alert('Ingresa coordenadas válidas (latitud entre -90 y 90, longitud entre -180 y 180).');
+        return;
+      }
+
+      const label = `📍 ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      openCoordPrediction(lat, lon, label);
+    }
+
+    function predictFromGeolocation(evt) {
+      if (!navigator.geolocation) {
+        alert('Tu navegador no soporta geolocalización.');
+        return;
+      }
+
+      // Aviso de privacidad
+      if (!confirm('🌍 Compartirás tu ubicación con Open-Meteo para la predicción.\n\nTus coordenadas solo se usarán para esta consulta y no se almacenarán.')) {
+        return;
+      }
+
+      const btn = evt?.target;
+      const originalText = btn?.textContent;
+      if (btn) { 
+        btn.textContent = '📡 Obteniendo ubicación...'; 
+        btn.disabled = true; 
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const { latitude, longitude } = pos.coords;
+          document.getElementById('coordLat').value = latitude.toFixed(4);
+          document.getElementById('coordLon').value = longitude.toFixed(4);
+          if (btn) { btn.textContent = originalText; btn.disabled = false; }
+          openCoordPrediction(latitude, longitude, '📍 Mi ubicación');
+        },
+        err => {
+          if (btn) { btn.textContent = originalText; btn.disabled = false; }
+          let msg = 'No se pudo obtener tu ubicación.';
+          if (err.code === err.PERMISSION_DENIED) msg = 'Permiso de ubicación denegado. Habilítalo en la configuración de tu navegador.';
+          else if (err.code === err.TIMEOUT) msg = 'Tiempo de espera agotado al obtener tu ubicación.';
+          alert(msg);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    }
+
+    /* ==========================================================================
+       ACTUALIZACIÓN DE UI
+       ========================================================================== */
+    function updateUI(cityName, lat, lon, meteoData, sunrise, sunset, sunriseData, sunsetData, sunriseResult, sunsetResult, optimalSunsetTime) {
+      document.getElementById('loadingState').innerHTML = '';
+      const locationInfo = chileanCities[cityName];
+
+      // Limpiar dataGrid
+      document.getElementById('dataGrid').innerHTML = '';
+
+      // Sanitizar nombre de ciudad
+      const safeCityName = safeLocationName(cityName);
+
+      // Construir HTML de ubicación
+      let locationHTML = `📍 ${safeHtml(safeCityName)}`;
+      if (locationInfo) {
+        const typeLabels = { observatory: '🔭 Observatorio Astronómico', park: '🌳 Parque Nacional' };
+        locationHTML += `<br><small style="opacity:0.8;font-size:0.9rem;">${
+          typeLabels[locationInfo.type] ? typeLabels[locationInfo.type] + '<br>' : ''
+        }${
+          locationInfo.altitude ? `Altitud: ${locationInfo.altitude.toLocaleString()} m • ` : ''
+        }${
+          locationInfo.operator ? `Operador: ${locationInfo.operator} • ` : ''
+        }Región: ${locationInfo.region}</small>`;
+      }
+
+      // Botón de cámara (si existe)
+      const cameraBtn = locationInfo?.weatherCamera
+        ? `<button class="weather-camera-btn" onclick="openWeatherCamera('${cityName.replace(/'/g, "\\'")}')"><span>📷</span> Ver cámara en directo</button>`
+        : '';
+
+      // Actualizar locationText
+      document.getElementById('locationText').innerHTML = `
+        <div class="location-header-row">
+          <div>${locationHTML}</div>
+          <div>${cameraBtn}</div>
+        </div>`;
+
+      // Obtener datos de nubes (if any)
+      const srCloudUI = sunriseData?.total != null ? `${Math.round(sunriseData.total)}%` : '—';
+      const ssCloudUI = sunsetData?.total != null ? `${Math.round(sunsetData.total)}%` : '—';
+
+      // Actualizar sunTimes una sola vez
+      document.getElementById('sunTimes').innerHTML = `
+        <div class="sun-time">
+          🌅 Amanecer: ${safeHtml(sunrise.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}))}
+          <div class="sun-time-clouds">Nubes: ☁ ${safeHtml(srCloudUI)}</div>
+        </div>
+        <div class="sun-time">
+          🌇 Atardecer: ${safeHtml(sunset.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}))}
+          <div class="sun-time-clouds">Nubes: ☁ ${safeHtml(ssCloudUI)}</div>
+        </div>`;
+
+      // Actualizar predicciones y paneles
+      updatePredictions(sunriseResult, sunsetResult, currentState.sunriseMoment?.optimalTime, optimalSunsetTime, sunriseData, sunsetData);
+      renderFactorPanel(sunriseResult, sunsetResult);
+      displayUncertainty(sunsetResult, 'uncertaintyPanel');
+
+      // Ajustar texto de botones toggle
+      const factorBtn = document.getElementById('toggleFactorBtn');
+      const uncertBtn = document.getElementById('toggleUncertaintyBtn');
+      if (factorBtn && document.getElementById('factorPanel').style.display === 'none') {
+        factorBtn.textContent = '📊 Ver contribuciones';
+        factorBtn.classList.remove('active');
+      }
+      if (uncertBtn && document.getElementById('uncertaintyPanel').style.display === 'none') {
+        uncertBtn.textContent = '🎯 Ver incerteza';
+        uncertBtn.classList.remove('active');
+      }
+    }
+
+    /* ==========================================================================
+       FUNCIÓN UPDATE PREDICTIONS
+       ========================================================================== */
+    function updatePredictions(sunriseResult, sunsetResult, optimalSunriseTime, optimalSunsetTime, sunriseData, sunsetData) {
+      console.log('DEBUG optimalSunsetTime recibido:', optimalSunsetTime?.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+      const predBlock = document.getElementById('predictions');
+      const srProb = (typeof sunriseResult === 'number') ? sunriseResult : sunriseResult.probability;
+      const ssProb = (typeof sunsetResult === 'number') ? sunsetResult : sunsetResult.probability;
+      const hasMC = typeof sunsetResult === 'object' && sunsetResult.confidenceInterval;
+      const sunriseStyles = getProbabilityStyles(srProb);
+      const sunsetStyles = getProbabilityStyles(ssProb);
+
+      const srTime = optimalSunriseTime ? optimalSunriseTime.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}) : '--:--';
+      const ssTime = optimalSunsetTime ? optimalSunsetTime.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}) : '--:--';
+      const srCloud = sunriseData?.total != null ? `${Math.round(sunriseData.total)}%` : '—';
+      const ssCloud = sunsetData?.total != null ? `${Math.round(sunsetData.total)}%` : '—';
+      const metaStyle = 'font-size:1rem;opacity:0.75;margin-top:5px;white-space:nowrap;';
+
+      if (hasMC) {
+        const srUnc = (sunriseResult.confidence?.std * 100 ?? 0).toFixed(1);
+        const ssUnc = (sunsetResult.confidence?.std * 100 ?? 0).toFixed(1);
+        
+        predBlock.innerHTML = `
+          <div class="mc-grid">
+            <div class="probability mc-box" style="background:${sunriseStyles.background};border:${sunriseStyles.border};box-shadow:${sunriseStyles.boxShadow ?? 'none'};color:${sunriseStyles.color};">
+              <div style="font-size:1.1rem;">🌅 Amanecer</div>
+              <div class="mc-row">
+                <span class="mc-percent">${(srProb*100).toFixed(0)}%</span>
+                <span class="mc-percent mc-unc">±${srUnc}%</span>
+              </div>
+              <div style="${metaStyle}">🕐 ${srTime}</div>
+            </div>
+            <div class="probability mc-box" style="background:${sunsetStyles.background};border:${sunsetStyles.border};box-shadow:${sunsetStyles.boxShadow ?? 'none'};color:${sunsetStyles.color};">
+              <div style="font-size:1.1rem;">🌇 Atardecer</div>
+              <div class="mc-row">
+                <span class="mc-percent">${(ssProb*100).toFixed(0)}%</span>
+                <span class="mc-percent mc-unc">±${ssUnc}%</span>
+              </div>
+              <div style="${metaStyle}">🕐 ${ssTime}</div>
+            </div>
+          </div>`;
+      } else {
+        predBlock.innerHTML = `
+          <div class="probability" style="background:${sunriseStyles.background};border:${sunriseStyles.border};box-shadow:${sunriseStyles.boxShadow ?? 'none'};color:${sunriseStyles.color};">
+            🌅 Amanecer: ${(srProb*100).toFixed(0)}%
+            <div style="${metaStyle}">🕐 ${srTime} · ☁ ${srCloud}</div>
+          </div>
+          <div class="probability" style="background:${sunsetStyles.background};border:${sunsetStyles.border};box-shadow:${sunsetStyles.boxShadow ?? 'none'};color:${sunsetStyles.color};">
+            🌇 Atardecer: ${(ssProb*100).toFixed(0)}%
+            <div style="${metaStyle}">🕐 ${ssTime} · ☁ ${ssCloud}</div>
+          </div>`;
+      }
+
+      Object.assign(predBlock.style, {
+        display: 'flex', gap: '15px', margin: '10px 0',
+        transition: 'all 0.3s ease', borderRadius: '12px', padding: '12px',
+        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)'
+      });
+
+      if (srProb > 0.7 && ssProb > 0.7) {
+        predBlock.style.background = 'linear-gradient(135deg, rgba(255,80,80,0.15), rgba(255,95,0,0.1))';
+        predBlock.style.border = '1px solid rgba(255,95,0,0.3)';
+        predBlock.style.boxShadow = '0 4px 20px rgba(255,80,80,0.15)';
+      } else if (srProb > 0.7 || ssProb > 0.7) {
+        predBlock.style.background = 'linear-gradient(135deg, rgba(255,80,80,0.1), rgba(255,165,0,0.05))';
+        predBlock.style.border = '1px solid rgba(255,165,0,0.2)';
+      }
+
+      if ((srProb > 0.8 || ssProb > 0.8) && !document.querySelector('style#fire-animation')) {
+        const style = document.createElement('style');
+        style.id = 'fire-animation';
+        style.textContent = '@keyframes fire { 0% { transform:scale(1); opacity:0.8; } 100% { transform:scale(1.2); opacity:1; } }';
+        document.head.appendChild(style);
+      }
+    }
+
+    /* ==========================================================================
+       CÁLCULO DE TODAS LAS CIUDADES EN BACKGROUND
+       ========================================================================== */
+    let _isCalculatingAllCities = false;
+
+    async function calcularTodasLasCiudades() {
+      if (_isCalculatingAllCities) {
+        log('⏳ Ya hay un cálculo de todas las ciudades en curso, se ignora esta llamada.');
+        return;
+      }
+      _isCalculatingAllCities = true;
+      const cities = Object.keys(chileanCities);
+      console.log(`🌎 Calculando ${cities.length} ciudades en background...`);
+      try {
+      // Precarga en batch (1 sola petición HTTP para todas, en vez de
+      // dejar que cada computeCityPrediction dispare su propio fetch
+      // individual más abajo). Todo lo que quede cacheado acá es un
+      // cache-hit instantáneo para getMeteoData() dentro del loop.
+        const locations = cities.map(name => ({
+          lat: chileanCities[name].lat,
+          lon: chileanCities[name].lon
+          }));
+        
+        await getMeteoDataBatch(locations);
+
+        for (const name of cities) {
+        const city = chileanCities[name];
+        try {
+          const result = await computeCityPrediction(city.lat, city.lon, { nSimulations: null, returnFactors: false, altitude: city.altitude ?? 0, includeSpatialUncertainty: false  });
+          if (!result) continue;
+
+          const { meteoData, sunsetMoment, sunriseMoment } = result;
+          const sunsetData  = sunsetMoment.data;
+          const sunriseData = sunriseMoment.data;
+          const sunsetElev  = sunsetMoment.elevDeg;
+          const sunriseElev = sunriseMoment.elevDeg;
+          const optimalSunsetTime = sunsetMoment.optimalTime;
+
+          const now   = timeUtils.localNoonDate();
+          const times = SunCalc.getTimes(now, city.lat, city.lon);
+          const { sunrise, sunset } = times;
+
+          const srProb = typeof result.sunrise === 'number' ? result.sunrise : result.sunrise.probability;
+          const ssProb = typeof result.sunset  === 'number' ? result.sunset  : result.sunset.probability;
+
+          const locationType = city.type || 'city';
+          const altitude = city.altitude ?? 0;
+
+          // Solo se guarda el horario de la sub-pestaña activa en una fila por ciudad, no dos.
+          const kind     = dataCollector.getActiveLabelKind ? dataCollector.getActiveLabelKind() : 'sunset';
+          const kindData = kind === 'sunrise' ? sunriseData : sunsetData;
+          const kindProb = kind === 'sunrise' ? srProb : ssProb;
+          const kindElev = kind === 'sunrise' ? sunriseElev : sunsetElev;
+          const kindTime = kind === 'sunrise' ? sunrise : sunset;
+          const kindOptimal = kind === 'sunrise' ? null : optimalSunsetTime;
+
+          dataCollector.collectPrediction({
+            locationName: name, locationType, lat: city.lat, lon: city.lon, altitude,
+            kind,
+            prob: kindProb, elev: kindElev,
+            time: kindTime?.toISOString() ?? null,
+            optimalArrebolTime: kindOptimal,
+            clouds: { low: kindData?.low ?? 0, mid: kindData?.mid ?? 0, high: kindData?.high ?? 0, total: kindData?.total ?? 0 },
+            weather: {
+              temperature: kindData?.temperature ?? meteoData.current.temperature,
+              humidity:    kindData?.humidity    ?? meteoData.current.humidity,
+              pressure:    kindData?.pressure    ?? meteoData.current.pressure,
+              dewpoint:    kindData?.dewpoint    ?? meteoData.current.dewpoint,
+              shortwave:   kindData?.shortwave   ?? meteoData.current.shortwave,
+              wind10m:          kindData?.wind10m          ?? meteoData.current.wind10m,
+              windDir10m:       kindData?.windDir10m       ?? meteoData.current.windDir10m,
+              windLow:          kindData?.windLow          ?? meteoData.current.windLow,
+              windMid:          kindData?.windMid          ?? meteoData.current.windMid,
+              windHigh:         kindData?.windHigh         ?? meteoData.current.windHigh,
+              directRadiation:  kindData?.directRadiation  ?? meteoData.current.directRadiation,
+              diffuseRadiation: kindData?.diffuseRadiation ?? meteoData.current.diffuseRadiation,
+              visibility:       kindData?.visibility       ?? meteoData.current.visibility,
+              freezingLevel:    kindData?.freezingLevel    ?? meteoData.current.freezingLevel
+            }
+          });
+
+          await new Promise(r => setTimeout(r, 500));
+
+        } catch (e) {
+          console.warn(`Error calculando ${name}:`, e.message);
+        }
+        }
+        console.log('✅ Todas las ciudades calculadas');
+        if (typeof renderAllCitiesTable === 'function') renderAllCitiesTable();
+      } finally {
+        _isCalculatingAllCities = false;
+      }
+    }
+
+    // Expuesta globalmente para que ml-data-collector.js
+    window.calcularTodasLasCiudades = calcularTodasLasCiudades;
+
+    // Si el día cambia mientras se está viendo una ciudad, el menú de
+    // tarjetas queda desactualizado pero NO se recalcula de inmediato
+    let _cardsStale = { cities: false, observatories: false };
+
+    // Bloqueo simple: mientras un cambio de día se está aplicando, se
+    // ignoran clics nuevos. Esto evita que dos cálculos (predictRedSunset /
+    // mountCityCardView) corran en paralelo escribiendo sobre el mismo
+    // estado/DOM — que era la causa de que a veces "ganara" un resultado
+    // viejo aunque el botón activo ya mostrara el día correcto.
+    let _dayChangeApplying = false;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      updateQueryDateTime();
+      renderDaySelector();
+
+      // Precarga TODO el clima en 1 sola petición HTTP antes de que
+      // mountCityCardView() empiece a pedir predicción tarjeta por
+      // tarjeta. Sin esto, cada tarjeta dispara su propio getMeteoData
+      // individual en paralelo con la caché vacía — decenas de fetches
+      // simultáneos que agotan el rate limit de Open-Meteo antes de que
+      // calcularTodasLasCiudades() (que sí batchea) llegue a correr.
+      try {
+        const locations = Object.values(chileanCities).map(c => ({ lat: c.lat, lon: c.lon }));
+        await getMeteoDataBatch(locations);
+      } catch (e) {
+        log(`⚠ Prefetch de clima falló: ${e.message}`);
+      }
+
+      mountCityCardView();
+      calcularTodasLasCiudades(); // el batch ya está cacheado; ya no hace falta el setTimeout de 4s
+
+      // Deep link: si la URL trae ?ciudad=X, abre esa ciudad directamente.
+      const initParams = new URLSearchParams(window.location.search);
+      const initCiudad = initParams.get('ciudad');
+
+      if (initCiudad && chileanCities[initCiudad]) {
+        const initTipo = initParams.get('tipo') || 'city';
+        showPrediction(initCiudad, initTipo, false); // false: la URL ya trae el parámetro, no la dupliquemos
+      }
+
+      // --- Toggle amanecer / atardecer en las tarjetas ---
+      const btnSunset  = document.getElementById('btnSunset');
+      const btnSunrise = document.getElementById('btnSunrise');
+ 
+      btnSunset.onclick = () => {
+        window.cardPredictionMode = 'sunset';
+        btnSunset.classList.add('active');
+        btnSunrise.classList.remove('active');
+        window.refreshCardProbabilities();
+ 
+        // Si hay un mapa de hexágonos activo, redibujarlo. 
+        if (currentState.lat && currentState.lon) {
+          MapUtils.updateHeatmap(currentState.lat, currentState.lon, currentState.altitude ?? 0);
+        }
+      };
+ 
+      btnSunrise.onclick = () => {
+        window.cardPredictionMode = 'sunrise';
+        btnSunrise.classList.add('active');
+        btnSunset.classList.remove('active');
+        window.refreshCardProbabilities();
+ 
+        if (currentState.lat && currentState.lon) {
+          MapUtils.updateHeatmap(currentState.lat, currentState.lon, currentState.altitude ?? 0);
+        }
+      };
+    });
+
+    const seleccionarCiudad = nombre => showPrediction(nombre, 'city');
+    const seleccionarObservatorio = nombre => showPrediction(nombre, 'observatory');
+    const selectCityFromRanking = nombre => showPrediction(nombre, 'city');
+
+    function probClass(p) {
+      if (p > 0.7) return 'high-prob';
+      if (p < 0.3) return 'low-prob';
+      return 'medium-prob';
+    }
+
+    window.computeRedProbability = computeRedProbability;
+    window.timeUtils = timeUtils;
+    window.chileanCities = chileanCities;
+    window.updateCharts = updateCharts;
+    window.getProbabilityStyles = getProbabilityStyles;
+    window.displayUncertainty = displayUncertainty;
+
+  </script>
+
+  <footer class="footer">
+    <p><span class="gradient-text">Préboles 2026</span>. Nicolás Medina Peña.</p>
+    <nav>
+      <a href="#" onclick="switchTab('info'); return false;" style="cursor:pointer;"><u>ℹ️ Información</u></a>
+      <a href="https://nicomedinap.github.io/about.html" target="_blank"><u>Sobre el autor</u></a>
+      <a href="https://nicomedinap.github.io/2025/12/21/Preboles.html" target="_blank"><u>Sobre el modelo predictivo y los datos</u></a>
+    </nav>
+  </footer>
+</body>
+</html>
