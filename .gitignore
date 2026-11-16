@@ -1,0 +1,9 @@
+__pycache__
+consultas sql
+astral.ipynb
+prueba_modelo.ipynb
+prueba_resultados_api.ipynb
+prueba_modelos_api.py
+.cache.sqlite
+# Ignoramos variables de entorno
+*.env

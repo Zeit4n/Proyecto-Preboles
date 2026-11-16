@@ -19,11 +19,24 @@ def datos_diarios(eventos):
         horas = data['date'].dt.strftime("%H:%M")
         registro = data[(horas == momentos[0]) | (horas == momentos[1])]
         #Calculamos la elevación del ángulo solar en la hora dada
+        '''
+        --- Versión antigua de registro['elev'] que no considera la presión atmosférica ---
+
         registro['elev'] = registro['date'].map(
             lambda x: solarposition.get_solarposition(time=x,
                                                     latitude=ubicaciones[ubicacion]["lat"],
                                                     longitude=ubicaciones[ubicacion]["lon"])
                                                     ['apparent_elevation'].iloc[0])
+        '''
+        registro['elev'] = registro.apply(
+            lambda fila: solarposition.get_solarposition(
+                time=fila['date'],
+                latitude=ubicaciones[ubicacion]["lat"],
+                longitude=ubicaciones[ubicacion]["lon"],
+                pressure=fila['pressure_msl']*100
+            )['apparent_elevation'].iloc[0],
+            axis=1
+        )
         
         if momentos[0] == momentos[1]:
             registro['location'] = ubicacion

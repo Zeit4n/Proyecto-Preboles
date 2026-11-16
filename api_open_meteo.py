@@ -62,7 +62,7 @@ for ubicacion, datos in ubicaciones.items():
     #Creamos DataFrame
     hourly_dataframe = pd.DataFrame(data = data)
 
-    # Convertir fechas a la zona horaria de la localidad
+    # Convertimos fechas a la zona horaria de la localidad
     hourly_dataframe["date"] = (
         hourly_dataframe["date"].dt.tz_convert(datos["timezone"])
     )
